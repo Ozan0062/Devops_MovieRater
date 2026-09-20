@@ -1,0 +1,103 @@
+import { Movie } from '../types/movie';
+
+export const mockMovies: Movie[] = [
+  {
+    id: 1,
+    title: 'The Fantastic 4: First Steps',
+    year: 2025,
+    director: 'Matt Shakman',
+    duration: 135,
+    rating: 'PG-13',
+    views: '4.2M',
+    summary: 'Marvel\'s first family of superheroes faces their greatest challenge yet. When a cosmic threat endangers the planet, Reed Richards, Sue Storm, Johnny Storm, and Ben Grimm must use their incredible powers to save humanity.',
+    genre: ['Action', 'Adventure', 'Sci-Fi'],
+    cast: ['Pedro Pascal', 'Vanessa Kirby', 'Joseph Quinn', 'Ebon Moss-Bachrach'],
+    language: 'English',
+    country: 'United States',
+    ratings: { imdb: 7.2, rottenTomatoes: 85, metacritic: 72 },
+    posterUrl: 'https://cdn.kinocheck.com/i/8subb0pkbp.jpg'
+  },
+  {
+    id: 2,
+    title: 'Weapons',
+    year: 2025,
+    director: 'Zach Cregger',
+    duration: 118,
+    rating: 'R',
+    views: '2.1M',
+    summary: 'A mind-bending thriller that explores the consequences of advanced weaponry falling into the wrong hands. Multiple storylines intersect in unexpected ways.',
+    genre: ['Thriller', 'Mystery', 'Drama'],
+    cast: ['Julia Garner', 'Josh Brolin', 'Sean Harris', 'Amy Madigan'],
+    language: 'English',
+    country: 'United States',
+    ratings: { imdb: 7.3, rottenTomatoes: 88, metacritic: 75 },
+    posterUrl: 'https://miro.medium.com/1*tlsRIqYthU7YGMad070sOw.jpeg'
+  },
+  {
+    id: 3,
+    title: 'Nobody 2',
+    year: 2025,
+    director: 'Timo Tjahjanto',
+    duration: 110,
+    rating: 'R',
+    views: '3.5M',
+    summary: 'The seemingly ordinary family man returns for another explosive adventure. This time, the stakes are higher and the action more intense as he protects those he loves.',
+    genre: ['Action', 'Thriller'],
+    cast: ['Bob Odenkirk', 'Connie Nielsen', 'Sharon Stone', 'Christopher Lloyd'],
+    language: 'English',
+    country: 'United States',
+    ratings: { imdb: 7.0, rottenTomatoes: 78, metacritic: 65 },
+    posterUrl: 'https://images.herzindagi.info/her-zindagi-english/images/2025/08/22/article/image/Main-1755857952806.webp'
+  },
+  {
+    id: 4,
+    title: 'Superman',
+    year: 2025,
+    director: 'James Gunn',
+    duration: 140,
+    rating: 'PG-13',
+    views: '5.8M',
+    summary: 'A fresh take on the Man of Steel. Clark Kent balances his dual identity while facing a new threat that tests both his strength and his humanity.',
+    genre: ['Action', 'Adventure', 'Superhero'],
+    cast: ['David Corenswet', 'Rachel Brosnahan', 'Nicholas Hoult', 'Edi Gathegi'],
+    language: 'English',
+    country: 'United States',
+    ratings: { imdb: 7.8, rottenTomatoes: 88, metacritic: 76 },
+    posterUrl: 'https://thecompanion.in/wp-content/uploads/2025/07/superman-2025.jpg'
+  },
+  {
+    id: 5,
+    title: 'The Dark Knight',
+    year: 2008,
+    director: 'Christopher Nolan',
+    duration: 152,
+    rating: 'PG-13',
+    views: '4.2M',
+    summary: 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.',
+    genre: ['Action', 'Crime', 'Drama'],
+    cast: ['Christian Bale', 'Heath Ledger', 'Aaron Eckhart', 'Michael Caine'],
+    language: 'English',
+    country: 'United States',
+    ratings: { imdb: 9.0, rottenTomatoes: 94, metacritic: 84 },
+    posterUrl: 'https://static.posters.cz/image/750webp/198201.webp'
+  },
+  {
+    id: 6,
+    title: 'Inception',
+    year: 2010,
+    director: 'Christopher Nolan',
+    duration: 148,
+    rating: 'PG-13',
+    views: '3.9M',
+    summary: 'A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.',
+    genre: ['Action', 'Sci-Fi', 'Thriller'],
+    cast: ['Leonardo DiCaprio', 'Joseph Gordon-Levitt', 'Elliot Page', 'Tom Hardy'],
+    language: 'English',
+    country: 'United States',
+    ratings: { imdb: 8.8, rottenTomatoes: 87, metacritic: 74 },
+    posterUrl: 'https://m.media-amazon.com/images/I/71thFiIUSpL._AC_UF894,1000_QL80_.jpg'
+  }
+];
+
+export const availableGenres = Array.from(new Set(mockMovies.flatMap(m => m.genre))).sort();
+export const availableYears = Array.from(new Set(mockMovies.map(m => m.year))).sort((a, b) => b - a);
