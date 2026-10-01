@@ -1,6 +1,6 @@
 import { Search, Film } from 'lucide-react';
-import { RatingCard } from './RatingCard';
-import { Movie, EnabledRatings } from '../types/movie';
+import { RatingCard } from '../components/RatingCard';
+import { Movie, EnabledRatings } from '../../models/movie';
 
 interface SearchResultsScreenProps {
   searchQuery: string;
