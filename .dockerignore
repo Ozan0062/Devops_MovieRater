@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+.git
+.vscode
+.idea
+.codex
+.agents
+.env
+.env.*
+*.local
+*.log
+*.tsbuildinfo
+coverage
+README.md

@@ -1,0 +1,10 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Angiv VITE_SUPABASE_URL i .env}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:?Angiv VITE_SUPABASE_PUBLISHABLE_KEY i .env}
+    ports:
+      - "8080:80"
