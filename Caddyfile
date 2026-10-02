@@ -1,0 +1,16 @@
+{
+	email {$ACME_EMAIL}
+	http_port 8080
+	https_port 8443
+	admin off
+	skip_install_trust
+}
+
+{$MOVIERATER_DOMAIN} {
+	reverse_proxy frontend:8080
+}
+
+# Only available inside the container networks, never published to the host.
+http://:2015 {
+	respond /health "OK" 200
+}

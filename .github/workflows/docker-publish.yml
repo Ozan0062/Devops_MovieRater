@@ -1,0 +1,243 @@
+name: Docker publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize publication, including multiple pending release tags, to avoid races
+# when main and a version tag point to the same commit.
+# queue:max is supported on GitHub.com; actionlint 1.7.12 has not added it yet.
+# https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+concurrency:
+  group: movierater-publish
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Test, scan and publish image
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      DOCKER_SMOKE_CONTAINER: movierater-publish-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Require public frontend configuration
+        run: |
+          for name in VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Set repository variable $name under Settings > Secrets and variables > Actions > Variables."
+              exit 1
+            fi
+          done
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint if configured
+        run: npm run lint --if-present
+
+      - name: Run tests if configured
+        run: npm test --if-present
+
+      - name: Build application
+        run: npm run build
+
+      - name: Prepare image name and version tags
+        id: image
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tags=("$image:sha-$GITHUB_SHA")
+          if [ "$GITHUB_REF" = 'refs/heads/main' ]; then
+            tags+=("$image:main" "$image:latest")
+          elif [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            tags+=("$image:$GITHUB_REF_NAME" "$image:${GITHUB_REF_NAME#v}")
+            if [ -z "${BASH_REMATCH[4]}" ]; then
+              tags+=("$image:${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" "$image:${BASH_REMATCH[1]}")
+            fi
+          else
+            echo '::error::Release tags must use vMAJOR.MINOR.PATCH, optionally with a prerelease suffix.'
+            exit 1
+          fi
+          echo "name=$image" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${tags[@]}" > "$RUNNER_TEMP/movierater-image-tags.txt"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reuse an existing immutable commit image
+        id: existing
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Distinguish a missing manifest (404) from auth, rate-limit or network errors.
+          cat > "$RUNNER_TEMP/check-ghcr.sh" <<'SCRIPT'
+          manifest_exists() {
+            local token status
+            token=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+              --user "$GITHUB_ACTOR:$GHCR_TOKEN" \
+              "https://ghcr.io/token?service=ghcr.io&scope=repository:${GITHUB_REPOSITORY,,}:pull,push") || return 2
+            token=$(printf '%s' "$token" | node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(0,"utf8")).token || "")') || return 2
+            if [ -z "$token" ]; then
+              echo '::error::GHCR did not return a registry token.'
+              return 2
+            fi
+            echo "::add-mask::$token"
+            status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+              --output /dev/null --write-out '%{http_code}' \
+              --header "Authorization: Bearer $token" \
+              --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+              "https://ghcr.io/v2/${GITHUB_REPOSITORY,,}/manifests/sha-$GITHUB_SHA") || return 2
+            case "$status" in
+              200) return 0 ;;
+              404) return 1 ;;
+              *) echo "::error::GHCR manifest lookup failed (HTTP $status)."; return 2 ;;
+            esac
+          }
+          SCRIPT
+          source "$RUNNER_TEMP/check-ghcr.sh"
+          if manifest_exists; then
+            docker pull "$IMAGE_NAME:sha-$GITHUB_SHA"
+            docker tag "$IMAGE_NAME:sha-$GITHUB_SHA" "movierater-ci:$GITHUB_SHA"
+            echo 'reuse=true' >> "$GITHUB_OUTPUT"
+          else
+            result=$?
+            if [ "$result" -ne 1 ]; then exit 1; fi
+            echo 'reuse=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.existing.outputs.reuse != 'true'
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build image once
+        if: steps.existing.outputs.reuse != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: movierater-ci:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            VITE_SUPABASE_URL=${{ env.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_PUBLISHABLE_KEY=${{ env.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          cache-from: type=gha,scope=movierater-publish
+          cache-to: type=gha,mode=max,scope=movierater-publish
+
+      - name: Test the image that will be published
+        run: node scripts/docker-smoke.mjs "movierater-ci:$GITHUB_SHA"
+
+      - name: Scan image vulnerabilities (advisory)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          version: v0.69.3
+          scan-type: image
+          image-ref: movierater-ci:${{ github.sha }}
+          scanners: vuln
+          format: table
+          output: trivy-image.txt
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Scan npm dependencies (advisory)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: table
+          output: trivy-dependencies.txt
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Upload vulnerability reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trivy-publish-${{ github.run_id }}
+          path: trivy-*.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish the tested image without rebuilding
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          REUSED: ${{ steps.existing.outputs.reuse }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A commit tag may be created once, but never silently overwritten.
+          if [ "$REUSED" != 'true' ]; then
+            source "$RUNNER_TEMP/check-ghcr.sh"
+            if manifest_exists; then
+              echo '::error::Commit image appeared during this run. Rerun to test and reuse it instead of overwriting it.'
+              exit 1
+            else
+              result=$?
+              if [ "$result" -ne 1 ]; then exit 1; fi
+            fi
+          fi
+          publish_main=true
+          if [ "$GITHUB_REF" = 'refs/heads/main' ]; then
+            main_head=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+              --header "Authorization: Bearer $GHCR_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+              | node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(0,"utf8")).object.sha)')
+            if [ "$main_head" != "$GITHUB_SHA" ]; then
+              publish_main=false
+              echo 'A newer commit is on main; only publish the immutable commit tag.'
+            fi
+          fi
+          while IFS= read -r tag; do
+            if [ "$REUSED" = 'true' ] && [ "$tag" = "$IMAGE_NAME:sha-$GITHUB_SHA" ]; then
+              continue
+            fi
+            if [ "$publish_main" = 'false' ] && { [ "$tag" = "$IMAGE_NAME:main" ] || [ "$tag" = "$IMAGE_NAME:latest" ]; }; then
+              continue
+            fi
+            docker tag "movierater-ci:$GITHUB_SHA" "$tag"
+            docker push "$tag"
+          done < "$RUNNER_TEMP/movierater-image-tags.txt"
+          {
+            echo '## Published MovieRater image'
+            echo "Commit tag: \`$IMAGE_NAME:sha-$GITHUB_SHA\`"
+            echo '```text'
+            docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "movierater-ci:$GITHUB_SHA"
+            echo '```'
+            echo 'The immutable commit image was tested with the production security settings.'
+            echo 'HIGH/CRITICAL vulnerability findings are advisory; see the Trivy report artifact.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up container
+        if: always()
+        run: docker rm --force "$DOCKER_SMOKE_CONTAINER" 2>/dev/null || true

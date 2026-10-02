@@ -1,13 +1,9 @@
+# Standalone server config: uses a tested registry image, never builds source.
 services:
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Angiv VITE_SUPABASE_URL i .env}
-        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:?Angiv VITE_SUPABASE_PUBLISHABLE_KEY i .env}
+    image: ${MOVIERATER_IMAGE:?Angiv et versionsfastlåst GHCR-image i .env.server}
     ports:
-      - "${HTTP_PORT:-8080}:8080"
+      - "127.0.0.1:${HTTP_PORT:-8080}:8080"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
