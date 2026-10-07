@@ -1,0 +1,103 @@
+name: Docker PR
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-check:
+    name: Build and test Docker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # These are public frontend settings. Fork PRs need no secrets or Supabase access.
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://example.supabase.co' }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_ci_placeholder' }}
+      DOCKER_SMOKE_CONTAINER: movierater-pr-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint if configured
+        run: npm run lint --if-present
+
+      - name: Run tests if configured
+        run: npm test --if-present
+
+      - name: Build application
+        run: npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: movierater-ci:${{ github.sha }}
+          build-args: |
+            VITE_SUPABASE_URL=${{ env.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_PUBLISHABLE_KEY=${{ env.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          cache-from: type=gha,scope=movierater-pr
+          cache-to: type=gha,mode=max,scope=movierater-pr
+
+      - name: Test container and HTTP endpoints
+        run: node scripts/docker-smoke.mjs "movierater-ci:$GITHUB_SHA"
+
+      - name: Scan image vulnerabilities (advisory)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          version: v0.69.3
+          scan-type: image
+          image-ref: movierater-ci:${{ github.sha }}
+          scanners: vuln
+          format: table
+          output: trivy-image.txt
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Scan npm dependencies (advisory)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: table
+          output: trivy-dependencies.txt
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Upload vulnerability reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trivy-pr-${{ github.run_id }}
+          path: trivy-*.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Clean up container
+        if: always()
+        run: docker rm --force "$DOCKER_SMOKE_CONTAINER" 2>/dev/null || true

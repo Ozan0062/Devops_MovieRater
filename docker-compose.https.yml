@@ -1,0 +1,59 @@
+# Optional override; combine with docker-compose.prod.yml (Compose >= 2.24.4).
+services:
+  frontend:
+    ports: !reset []
+    networks:
+      - app
+
+  proxy:
+    image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    user: "1000:1000"
+    ports:
+      - "80:8080"
+      - "443:8443"
+    environment:
+      MOVIERATER_DOMAIN: ${MOVIERATER_DOMAIN:?Angiv et rigtigt domæne i .env.server}
+      ACME_EMAIL: ${ACME_EMAIL:?Angiv email til HTTPS-certifikater i .env.server}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2015/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - app
+      - edge
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    # Required to execute the official Caddy binary, which carries this file capability.
+    cap_add:
+      - NET_BIND_SERVICE
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 128m
+    cpus: 0.50
+
+networks:
+  app:
+    internal: true
+  edge:
+
+volumes:
+  caddy_data:
+  caddy_config:
