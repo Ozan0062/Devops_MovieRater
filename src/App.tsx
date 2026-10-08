@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Header } from './components/Header';
-import { RatingCard } from './components/RatingCard';
-import { SearchResultsScreen } from './components/SearchResultsScreen';
-import { MovieDetailsScreen } from './components/MovieDetailsScreen';
-import { FilterBar, FilterOptions } from './components/FilterBar';
-import { Movie, EnabledRatings, Screen } from './types/movie';
-import { mockMovies, availableGenres, availableYears } from './data/mockMovies';
+import { Header } from './views/components/Header';
+import { RatingCard } from './views/components/RatingCard';
+import { SearchResultsScreen } from './views/screens/SearchResultsScreen';
+import { MovieDetailsScreen } from './views/screens/MovieDetailsScreen';
+import { FilterBar, FilterOptions } from './views/components/FilterBar';
+import { Movie, EnabledRatings, Screen } from './models/movie';
+import { mockMovies, availableGenres, availableYears } from './models/mockMovies';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');

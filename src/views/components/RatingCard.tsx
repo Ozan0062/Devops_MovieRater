@@ -2,7 +2,7 @@ import { ImageWithFallback } from './ImageWithFallback';
 import { ImdbLogo } from './logos/ImdbLogo';
 import { RottenTomatoesLogo } from './logos/RottenTomatoesLogo';
 import { MetacriticLogo } from './logos/MetacriticLogo';
-import { Rating, EnabledRatings } from '../types/movie';
+import { Rating, EnabledRatings } from '../../models/movie';
 
 interface RatingCardProps {
   title: string;

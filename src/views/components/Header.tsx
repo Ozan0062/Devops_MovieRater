@@ -5,9 +5,9 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuLabel,
-} from './ui/dropdown-menu';
-import { Checkbox } from './ui/checkbox';
-import { EnabledRatings } from '../types/movie';
+} from '../ui/dropdown-menu';
+import { Checkbox } from '../ui/checkbox';
+import { EnabledRatings } from '../../models/movie';
 
 
 interface HeaderProps {

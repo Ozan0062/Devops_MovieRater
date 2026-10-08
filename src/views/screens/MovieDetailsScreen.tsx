@@ -1,11 +1,11 @@
 import { ArrowLeft, Eye, Film, Clock, Globe } from 'lucide-react';
-import { ImageWithFallback } from './ImageWithFallback';
-import { ImdbLogo } from './logos/ImdbLogo';
-import { RottenTomatoesLogo } from './logos/RottenTomatoesLogo';
-import { MetacriticLogo } from './logos/MetacriticLogo';
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from './ui/dialog';
+import { ImageWithFallback } from '../components/ImageWithFallback';
+import { ImdbLogo } from '../components/logos/ImdbLogo';
+import { RottenTomatoesLogo } from '../components/logos/RottenTomatoesLogo';
+import { MetacriticLogo } from '../components/logos/MetacriticLogo';
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from '../ui/dialog';
 import { useState } from 'react';
-import { Movie, EnabledRatings } from '../types/movie';
+import { Movie, EnabledRatings } from '../../models/movie';
 
 interface MovieDetailsProps {
   movie: Movie;
